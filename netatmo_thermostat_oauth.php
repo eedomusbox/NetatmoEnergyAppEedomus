@@ -18,7 +18,7 @@
 
 #### variables ####
 $MODE_NETATMO = 'netatmo'; // Dans ce mode, on met une consigne temporaire
-$MODE_EEDOMUS = 'eedomus'; // Dans ce mode, on maintient la température de consigne
+$MODE_EEDOMUS = 'eedomus'; // Dans ce mode, on maintient la tempÃ©rature de consigne
 $CACHE_DURATION = 2; // minutes
 $is_action = false; // Action ou mode capteur ?
 $code = getArg('oauth_code');
@@ -30,7 +30,7 @@ $prev_code = loadVariable('code');
 $api_url = 'https://api.netatmo.com';
 $url_homesdata = $api_url.'/api/homesdata';
 $url_homesdata_id = $api_url.'/api/homesdata?home_id='.$home_id;
-$url_homestatus = $api_url.'/api/homestatus?home_id='.$home_id;
+$url_homestatus = $api_url.'/api/homestatus?home_id='.$home_id;	
 ################################################################
 
 ##### function #####
@@ -69,7 +69,7 @@ function sdk_netatmo_html($extension_module){
 	if(sizeof($extension_module) > 0){
 		$ret .= '<br>';
 		$ret .= '<br>';
-		$ret .= "Voici la liste de vos maisons et leurs pièces associées :";
+		$ret .= "Voici la liste de vos maisons et leurs piÃ¨ces associÃ©es :";
 		$ret .= '<br>';
 		$ret .= '<ul>';
 		//homes informations
@@ -86,6 +86,42 @@ function sdk_netatmo_html($extension_module){
 	}
 
 	return $ret;
+}
+
+function sdk_netatmo_set_room_switchhomeschedule($home_id, $url_homesdata_id, $schedName, $headers){
+	
+	// RÃ©cherche de l'id du planning
+		$schedId = loadVariable($schedName);
+		echo "scchedule $schedId";
+		if ( $schedId == '' ) { // Recherche via une requete
+	    	$schedId = sdk_netatmo_get_sheduleid( $home_id, $url_homesdata_id, $schedName,$headers );
+		}
+	
+	$url = $GLOBALS['api_url'].'/api/switchhomeschedule?home_id='.$home_id.'&schedule_id='.$schedId; echo $url;
+	return sdk_get_query_and_check_error($url, $headers, FALSE, FALSE);
+}
+
+function sdk_netatmo_get_sheduleid($home_id, $url_homesdata_id, $schedName, $headers){
+
+	$scheduleNameId = '';
+	//homes data	
+	$json_homesdata = sdk_get_query_and_check_error($url_homesdata_id, $headers);
+
+	//modules and rooms name
+	for ($i = 0; $i < sizeof($json_homesdata['body']['homes']); $i++){ 
+		if ($json_homesdata['body']['homes'][$i]['id'] == $home_id) { 
+			//get schedules informations
+			for ($j = 0; $j < sizeof($json_homesdata['body']['homes'][$i]['therm_schedules']); $j++){ 
+				$scheduleName = $json_homesdata['body']['homes'][$i]['therm_schedules'][$j]['name'];
+				echo $scheduleName."//".$schedName;
+				if ($scheduleName == $schedName ) {
+					$scheduleNameId = $json_homesdata['body']['homes'][$i]['therm_schedules'][$j]['id'];
+				}
+			}
+		}
+	}
+	
+	return $scheduleNameId;
 }
 
 function sdk_netatmo_set_room_temperature($home_id, $room_id, $mode, $temperature, $delay = 60, $headers){
@@ -150,7 +186,9 @@ function sdk_netatmo_compute_boiler_status($boiler_information){
 ##### check cache #####
 $setpoint_mode = $_GET['setpoint_mode'];
 $setpoint_temp = $_GET['setpoint_temperature'];
-if ($setpoint_mode != '' || $setpoint_temp != ''){
+$scheduleName =  $_GET['scheduleName'];
+ 
+if ($setpoint_mode != '' || $setpoint_temp != '' || $scheduleName != ''){
 	$is_action = true;
 }
 
@@ -167,16 +205,16 @@ if (!$is_action && $_GET['mode'] != 'verify' && $time_from_last < $CACHE_DURATIO
 
 ##### recuperation acces_token #####
 if (strlen($prev_code) > 1 && $code == $prev_code){
-	// on reprend le dernier refresh_token seulement s'il correspond au même code
+	// on reprend le dernier refresh_token seulement s'il correspond au mÃªme code
 	$refresh_token = loadVariable('refresh_token');
 	$expire_time = loadVariable('expire_time');
-	// s'il n'a pas expiré on peut reprendre l'access_token
+	// s'il n'a pas expirÃ© on peut reprendre l'access_token
   	if (time() < $expire_time){
     	$access_token = loadVariable('access_token');
   	}
 }
 
-// on a déjà un token d'accès non expiré pour le code demandé
+// on a dÃ©jÃ  un token d'accÃ¨s non expirÃ© pour le code demandÃ©
 if ($access_token == ''){
 	if (strlen($refresh_token) > 1){
 		// on peut juste rafraichir le token
@@ -184,7 +222,7 @@ if ($access_token == ''){
 		$postdata = 'grant_type='.$grant_type.'&refresh_token='.$refresh_token;
 	}
 	else{
-		// 1ére utilisation après obtention du code
+		// 1Ã©re utilisation aprÃ¨s obtention du code
 		$grant_type = 'authorization_code';
 		$redirect_uri = 'https://secure.eedomus.com/sdk/plugins/netatmo_thermostat/callback.php';
 		$scope = 'read_thermostat write_thermostat';
@@ -215,7 +253,7 @@ if ($access_token == ''){
 $headers = array("Authorization: Bearer ".$access_token);
 ################################################################
 
-##### information lors de la récupération du code oauth #####
+##### information lors de la rÃ©cupÃ©ration du code oauth #####
 if ($_GET['mode'] == 'verify'){
 	?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 	<html xmlns="http://www.w3.org/1999/xhtml">
@@ -239,7 +277,7 @@ if ($_GET['mode'] == 'verify'){
 	echo sdk_netatmo_html($json_homesdata);
 
 	echo '<br>';
-	echo "Vous pouvez copier/coller ces informations dans le paramétrage de votre périphérique Eedomus.";
+	echo "Vous pouvez copier/coller ces informations dans le paramÃ©trage de votre pÃ©riphÃ©rique Eedomus.";
 
 	die();
 }
@@ -259,7 +297,7 @@ if($home_id == ''){
 	die();
 }
 
-// Les critères sont réunis pour demander d'effectuer une action
+// Les critÃ¨res sont rÃ©unis pour demander d'effectuer une action
 if ($is_action){
 	// Valeurs possibles pour le mode
 	$setpoint_mode_home_valid_values = array('away', 'hg', 'schedule');
@@ -271,8 +309,11 @@ if ($is_action){
 	$xml .= '<netatmo>';
 	$xml .= '<status>';
 
-	// On va passer en mode manuel et forcer une température
-	if($setpoint_temp != ''){
+	// On va passer en mode manuel et forcer une tempÃ©rature
+	if ( $scheduleName != '' ) {
+		$xml .= sdk_netatmo_set_room_switchhomeschedule($home_id,$url_homesdata_id,$scheduleName,$headers);
+	}
+	else if($setpoint_temp != ''){
 		$mode;
 		$maintain_setpoint = $_GET['maintain_setpoint'];
 		if($maintain_setpoint == "always"){
@@ -291,11 +332,12 @@ if ($is_action){
 		$url = $api_url.'/api/setroomthermpoint?home_id='.$home_id.'&room_id='.$room_id.'&mode='.$setpoint_mode;
 		$xml .= sdk_get_query_and_check_error($url, $headers, FALSE, FALSE);
 	}
-	// On va seulement changer de mode sans modifier la température
+	// On va seulement changer de mode sans modifier la tempÃ©rature
 	else if(in_array($setpoint_mode, $setpoint_mode_home_valid_values)){
 		$url = $api_url.'/api/setthermmode?home_id='.$home_id.'&mode='.$setpoint_mode;
 		$xml .= sdk_get_query_and_check_error($url, $headers, FALSE, FALSE);
 	}
+	
 	else{
 		$xml .= 'ko';
 	}
@@ -304,11 +346,12 @@ if ($is_action){
 	$xml .= '</netatmo>';
 	echo $xml;
 }
-// On effectue une lecture des données
+// On effectue une lecture des donnÃ©es
 else{
 	//variables
 	$modules_name = array();
 	$rooms_name = array();
+	$schedules = array();
 
     //home status
 	$json_homestatus = sdk_get_query_and_check_error($url_homestatus, $headers);
@@ -325,7 +368,23 @@ else{
 			//rooms
 			for ($j = 0; $j < sizeof($json_homesdata['body']['homes'][$i]['rooms']); $j++){
 				$rooms_name[$json_homesdata['body']['homes'][$i]['rooms'][$j]['id']] = str_replace(' ', '_', $json_homesdata['body']['homes'][$i]['rooms'][$j]['name']);
-			}			
+			}	
+				//get schedules informations
+			$schedules .= '<schedules>';
+			for ($j = 0; $j < sizeof($json_homesdata['body']['homes'][$i]['therm_schedules']); $j++){ 
+				//schedule informations
+				if ( $json_homesdata['body']['homes'][$i]['therm_schedules'][$j]['selected'] == 'true' ) {
+					$selectedSchedule = '<selected>'. $json_homesdata['body']['homes'][$i]['therm_schedules'][$j]['name'].'</selected>';
+				}
+				$scheduleName = $json_homesdata['body']['homes'][$i]['therm_schedules'][$j]['name'];
+				$scheduleNameId = $json_homesdata['body']['homes'][$i]['therm_schedules'][$j]['id'];
+				$schedules .= '<'.$scheduleName.'>';
+				$schedules .= '<id>'.$scheduleNameId.'</id>';
+				$schedules .= '</'.$scheduleName.'>';
+				// Mis en memoire du resultat des planning
+				saveVariable( $scheduleName , $scheduleNameId);
+			}
+			$schedules .= $selectedSchedule.'</schedules>';
 		}
 	}
 
@@ -338,7 +397,7 @@ else{
 		$rooms .= '<therm_setpoint_mode>'.$json_homestatus['body']['home']['rooms'][$i]['therm_setpoint_mode'].'</therm_setpoint_mode>';
 		$rooms .= '</room_'.$rooms_name[$json_homestatus['body']['home']['rooms'][$i]['id']].'>';
 	}
-
+	
 	//get modules informations 
 	for ($i = 0; $i < sizeof($json_homestatus['body']['home']['modules']); $i++){
 		$modules .= '<module_'.$modules_name[$json_homestatus['body']['home']['modules'][$i]['id']].'>';
@@ -373,10 +432,10 @@ else{
 	$cached_xml .= '<cached>0</cached>';
 	
 	if (isset($setpoint_temperature) && $setpoint_mode == 'manual'){
-		// Température manuellement imposée
+		// TempÃ©rature manuellement imposÃ©e
 		$cached_xml .= '<setpoint_temperature>'.$setpoint_temperature.'</setpoint_temperature>';
 
-		// Vérification: besoin de l'imposer à nouveau ?
+		// VÃ©rification: besoin de l'imposer Ã  nouveau ?
 		// Oui si on est en mode eedomus et proche du temps imparti
 		$maintain_mode = loadVariable('maintain_mode');
 		if($maintain_mode != $MODE_NETATMO){
@@ -398,6 +457,9 @@ else{
 	
 	if(isset($rooms)){
 		$cached_xml .= $rooms;
+	}
+	if(isset($schedules)){ 
+		$cached_xml .= $schedules;
 	}
 	if(isset($modules)){
 		$cached_xml .= $modules;
